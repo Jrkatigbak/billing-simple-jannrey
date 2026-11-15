@@ -45,6 +45,20 @@ function db(): PDO
             throw $error;
         }
     }
+    if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 1) {
+        $db->exec('BEGIN IMMEDIATE');
+        try {
+            if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 1) {
+                $db->exec('ALTER TABLE payments ADD COLUMN scheduled INTEGER NOT NULL DEFAULT 1');
+                $db->exec('ALTER TABLE payments ADD COLUMN previous_day INTEGER');
+                $db->exec('PRAGMA user_version=2');
+            }
+            $db->exec('COMMIT');
+        } catch (Throwable $error) {
+            $db->exec('ROLLBACK');
+            throw $error;
+        }
+    }
     return $db;
 }
 
@@ -58,8 +72,9 @@ function query(string $sql, array $params = []): PDOStatement
 function ledger(string $where = '', array $params = []): array
 {
     return query(
-        "SELECT l.*, c.name, min(p.month) first, max(p.month) last, count(*) terms,
-        sum(p.cents) total, sum(p.cents*p.paid) received
+        "SELECT l.*, c.name, min(CASE WHEN p.scheduled=1 THEN p.month END) first,
+        max(CASE WHEN p.scheduled=1 THEN p.month END) last, sum(p.scheduled) terms,
+        sum(p.cents*p.scheduled) total, sum(p.cents*p.paid) received
         FROM loans l JOIN clients c ON l.client=c.id JOIN payments p ON p.loan=l.id
         $where GROUP BY l.id ORDER BY l.id DESC",
         $params

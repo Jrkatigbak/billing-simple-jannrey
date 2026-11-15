@@ -154,7 +154,7 @@ elseif ($admin && (isset($_GET['new']) || ($loan && isset($_GET['edit'])))):
     $defaultAmount = '';
     if ($loan) {
         $defaultAmount = number_format(
-            (int) query('SELECT cents FROM payments WHERE loan=? ORDER BY paid,month LIMIT 1', [
+            (int) query('SELECT cents FROM payments WHERE loan=? AND scheduled=1 ORDER BY paid,month LIMIT 1', [
                 $loan['id'],
             ])->fetchColumn() / 100,
             2,
@@ -171,7 +171,7 @@ elseif ($admin && (isset($_GET['new']) || ($loan && isset($_GET['edit'])))):
     $view = 'loan-form.php';
 elseif ($loan):
     $payments = query(
-        'SELECT p.*, d.mime, d.remarks FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? ORDER BY p.month',
+        'SELECT p.*, d.mime, d.remarks FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? ORDER BY p.scheduled DESC, p.month',
         [$loan['id']],
     )->fetchAll();
     $view = 'statement.php';

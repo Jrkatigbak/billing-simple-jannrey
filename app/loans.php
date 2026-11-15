@@ -18,26 +18,22 @@ function saveLoanFromForm(): int
         if (!query('SELECT id FROM loans WHERE id=?', [$id])->fetchColumn()) {
             throw new DomainException('Loan unavailable.');
         }
-        foreach (
-            query(
-                'SELECT p.month FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? AND (p.paid=1 OR d.mime IS NOT NULL OR length(d.remarks)>0)',
-                [$id],
-            )
-            as $row
-        ) {
-            if (!in_array($row['month'], $schedule, true)) {
-                throw new DomainException(
-                    'The term must include months with a paid installment, proof or remarks.',
-                );
-            }
-        }
+        query(
+            'UPDATE payments SET scheduled=0, previous_day=(SELECT payment_day FROM loans WHERE id=?)
+             WHERE loan=? AND scheduled=1 AND (month<? OR month>?)
+             AND (paid=1 OR EXISTS (
+                 SELECT 1 FROM payment_details d WHERE d.loan=payments.loan AND d.month=payments.month
+                 AND (d.mime IS NOT NULL OR length(d.remarks)>0)
+             ))',
+            [$id, $id, $schedule[0], end($schedule)],
+        );
         query('UPDATE loans SET client=?,title=?,payment_day=? WHERE id=?', [
             $client,
             $title,
             $day,
             $id,
         ]);
-        query('DELETE FROM payments WHERE loan=? AND (month<? OR month>?)', [
+        query('DELETE FROM payments WHERE loan=? AND scheduled=1 AND (month<? OR month>?)', [
             $id,
             $schedule[0],
             end($schedule),
@@ -53,7 +49,8 @@ function saveLoanFromForm(): int
     }
     foreach ($schedule as $m) {
         query(
-            'INSERT INTO payments(loan,month,cents) VALUES(?,?,?) ON CONFLICT(loan,month) DO UPDATE SET cents=excluded.cents WHERE payments.paid=0',
+            'INSERT INTO payments(loan,month,cents) VALUES(?,?,?) ON CONFLICT(loan,month) DO UPDATE SET scheduled=1, previous_day=NULL,
+             cents=CASE WHEN payments.paid=1 THEN payments.cents ELSE excluded.cents END',
             [$id, $m, $cents],
         );
     }

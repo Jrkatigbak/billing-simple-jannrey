@@ -45,7 +45,7 @@ if (proofDialog && typeof proofDialog.showModal === 'function') {
       return;
     event.preventDefault();
     proofDialog.querySelector('h2').textContent =
-      'Payment ' + link.dataset.payment + ' · Proof of payment';
+      link.dataset.payment + ' · Proof of payment';
     image.src = link.href;
     proofDialog.showModal();
   });

@@ -58,13 +58,16 @@
         </thead>
         <tbody>
             <?php foreach ($payments as $index => $payment): ?>
+                <?php $paymentLabel = $payment['scheduled'] ? 'Payment ' . ($index + 1) : 'Previous installment'; ?>
+                <?php if ($index === (int) $loan['terms']): ?>
+                    <tr><th colspan="4">Records outside the current schedule</th></tr>
+                <?php endif; ?>
                 <tr id="p-<?= escapeHtml($payment['month']) ?>">
                     <td>
                         <strong>
-                            Payment
-                            <?= $index + 1 ?>
+                            <?= $paymentLabel ?>
                         </strong>
-                        <small><?= paymentDateLabel($payment['month'], $loan['payment_day']) ?></small>
+                        <small><?= paymentDateLabel($payment['month'], $payment['scheduled'] ? $loan['payment_day'] : $payment['previous_day']) ?></small>
                     </td>
                     <td><?= money($payment['cents']) ?></td>
                     <td>
@@ -75,7 +78,7 @@
                                 <input type="hidden" name="id" value="<?= $loan['id'] ?>">
                                 <input type="hidden" name="month" value="<?= escapeHtml($payment['month']) ?>">
                                 <input type="hidden" name="paid" value="<?= $payment['paid'] ? 0 : 1 ?>">
-                                <button class="pill p<?= $payment['paid'] ?>" aria-label="Mark Payment <?= $index + 1 ?> as <?= $payment['paid'] ? 'unpaid' : 'paid' ?>" title="Mark as <?= $payment['paid'] ? 'unpaid' : 'paid' ?>">
+                                <button class="pill p<?= $payment['paid'] ?>" aria-label="Mark <?= $paymentLabel ?> as <?= $payment['paid'] ? 'unpaid' : 'paid' ?>" title="Mark as <?= $payment['paid'] ? 'unpaid' : 'paid' ?>">
                                     <?= $status ?>
                                     ⇄
                                 </button>
@@ -94,7 +97,7 @@
                                     ]
                                 ); ?>
                             <div class="proof-actions">
-                                <a class="proof-button" href="<?= escapeHtml($proofUrl . '&preview=1') ?>" target="_blank" rel="noopener" <?= $payment['mime'] === 'application/pdf' ? '' : 'data-image-proof' ?> data-payment="<?= $index + 1 ?>">View proof</a>
+                                <a class="proof-button" href="<?= escapeHtml($proofUrl . '&preview=1') ?>" target="_blank" rel="noopener" <?= $payment['mime'] === 'application/pdf' ? '' : 'data-image-proof' ?> data-payment="<?= $paymentLabel ?>">View proof</a>
                             </div>
                         <?php
                         endif; ?>

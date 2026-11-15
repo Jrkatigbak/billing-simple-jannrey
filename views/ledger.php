@@ -32,9 +32,9 @@
                 <small><?= escapeHtml($loanRow['name']) ?></small>
             </div>
             <div class="end">
-                <strong><?= money($loanRow['total'] - $loanRow['received']) ?></strong>
+                <strong><?= money(abs($loanRow['total'] - $loanRow['received'])) ?></strong>
                 <small>
-                    <?= $loanRow['total'] == $loanRow['received'] ? 'Paid in full' : 'Outstanding balance' ?>
+                    <?= $loanRow['received'] > $loanRow['total'] ? 'Credit balance' : ($loanRow['total'] == $loanRow['received'] ? 'Paid in full' : 'Outstanding balance') ?>
                     ›
                 </small>
             </div>

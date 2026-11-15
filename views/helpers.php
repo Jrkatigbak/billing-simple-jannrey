@@ -12,7 +12,7 @@ function renderFormFields(string $operation): void
 
 function renderTotals(int $total, int $received): void
 {
-    $totals = ['Total amount' => $total, 'Amount paid' => $received, 'Balance' => $total - $received];
+    $totals = ['Total amount' => $total, 'Amount paid' => $received, ($received > $total ? 'Credit balance' : 'Balance') => abs($total - $received)];
     ?>
     <div class="stats">
         <?php foreach ($totals as $label => $cents): ?>
