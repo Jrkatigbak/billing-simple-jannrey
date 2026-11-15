@@ -5,11 +5,8 @@
     <div class="eyebrow">
         Billing details
     </div>
-    <h1><?= escapeHtml($loan['title']) ?></h1>
-    <p>
-        Loan owner ·
-        <b><?= escapeHtml($loan['name']) ?></b>
-    </p>
+    <h1><?= escapeHtml($loan['name']) ?></h1>
+    <p><?= escapeHtml($loan['title']) ?></p>
     <?php renderTotals($loan['total'], $loan['received']); ?>
 </section>
 <section class="sectionhead">

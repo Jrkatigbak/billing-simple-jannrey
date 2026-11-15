@@ -28,8 +28,8 @@
     <?php foreach ($loans as $loanRow): ?>
         <a class="item loan" href="?loan=<?= $loanRow['id'] ?>">
             <div>
-                <strong><?= escapeHtml($loanRow['title']) ?></strong>
-                <small><?= escapeHtml($loanRow['name']) ?></small>
+                <strong><?= escapeHtml($loanRow['name']) ?></strong>
+                <small><?= escapeHtml($loanRow['title']) ?></small>
             </div>
             <div class="end">
                 <strong><?= money(abs($loanRow['total'] - $loanRow['received'])) ?></strong>
