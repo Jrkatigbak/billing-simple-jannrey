@@ -59,6 +59,34 @@ function db(): PDO
             throw $error;
         }
     }
+    if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 2) {
+        $db->exec('BEGIN IMMEDIATE');
+        try {
+            if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 2) {
+                $db->exec('ALTER TABLE clients ADD COLUMN email TEXT');
+                $db->exec('CREATE TABLE mail_settings(id INTEGER PRIMARY KEY CHECK(id=1), host TEXT NOT NULL, port INTEGER NOT NULL, username TEXT NOT NULL, password TEXT NOT NULL, sender TEXT NOT NULL, reminder_days INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 0)');
+                $db->exec('CREATE TABLE mail_jobs(id INTEGER PRIMARY KEY, loan INTEGER NOT NULL, month TEXT NOT NULL, kind TEXT NOT NULL, due_date TEXT NOT NULL, recipient TEXT NOT NULL, state TEXT NOT NULL DEFAULT "pending", attempts INTEGER NOT NULL DEFAULT 0, UNIQUE(loan,month,kind))');
+                $db->exec('PRAGMA user_version=3');
+            }
+            $db->exec('COMMIT');
+        } catch (Throwable $error) {
+            $db->exec('ROLLBACK');
+            throw $error;
+        }
+    }
+    if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 3) {
+        $db->exec('BEGIN IMMEDIATE');
+        try {
+            if ((int) $db->query('PRAGMA user_version')->fetchColumn() === 3) {
+                $db->exec('CREATE TABLE email_verifications(client INTEGER PRIMARY KEY REFERENCES clients(id), email TEXT NOT NULL, token_hash TEXT NOT NULL, expires_at INTEGER NOT NULL)');
+                $db->exec('PRAGMA user_version=4');
+            }
+            $db->exec('COMMIT');
+        } catch (Throwable $error) {
+            $db->exec('ROLLBACK');
+            throw $error;
+        }
+    }
     return $db;
 }
 

@@ -4,6 +4,7 @@ ini_set('display_errors', '0');
 require dirname(__DIR__) . '/core.php';
 require dirname(__DIR__) . '/app/security.php';
 require dirname(__DIR__) . '/app/loans.php';
+require dirname(__DIR__) . '/app/mail.php';
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -15,6 +16,7 @@ $public = array_key_exists('s', $_GET);
 $loan = null;
 $admin = false;
 $error = '';
+$notice = '';
 $csrf = '';
 function redirectTo(string $q = ''): never
 {
@@ -30,7 +32,48 @@ if ($public) {
     if (!$loan) {
         http_response_code(404);
     }
-    if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'HEAD') {
+    if ($loan && isset($_GET['verify']) && is_string($_GET['verify'])) {
+        $verification = query('SELECT * FROM email_verifications WHERE client=?', [$loan['client']])->fetch();
+        if ($verification && $verification['expires_at'] >= time() && hash_equals($verification['token_hash'], hash('sha256', $_GET['verify']))) {
+            db()->beginTransaction();
+            query('UPDATE clients SET email=? WHERE id=?', [$verification['email'], $loan['client']]);
+            query('UPDATE mail_jobs SET state="cancelled" WHERE loan IN (SELECT id FROM loans WHERE client=?) AND state="pending" AND recipient<>?', [$loan['client'], $verification['email']]);
+            query('DELETE FROM email_verifications WHERE client=?', [$loan['client']]);
+            db()->commit();
+            $notice = 'Your notification email is confirmed.';
+        } else {
+            $error = 'This confirmation link has expired or was already used.';
+        }
+    }
+    if ($loan && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        try {
+            $settings = mailSettings();
+            if (!$settings || !$settings['enabled']) {
+                throw new DomainException('Email notifications are unavailable.');
+            }
+            $email = customerEmail(field('email'));
+            if ($email === null) {
+                throw new DomainException('Enter your email address.');
+            }
+            $token = bin2hex(random_bytes(32));
+            query('INSERT INTO email_verifications(client,email,token_hash,expires_at) VALUES(?,?,?,?) ON CONFLICT(client) DO UPDATE SET email=excluded.email,token_hash=excluded.token_hash,expires_at=excluded.expires_at', [
+                $loan['client'], $email, hash('sha256', $token), time() + 86400,
+            ]);
+            $host = $_SERVER['HTTP_HOST'] ?? '';
+            if (!preg_match('/^[a-z0-9.-]+(?::[0-9]{1,5})?$/iD', $host)) {
+                throw new DomainException('Unable to create a confirmation link.');
+            }
+            $scheme = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+            $path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
+            $link = $scheme . '://' . $host . $path . '?s=' . rawurlencode($loan['token']) . '&verify=' . $token;
+            smtpSend($settings, $email, 'Confirm billing notification email', "Open this link to receive billing notifications:\n\n" . $link . "\n\nThis link expires in 24 hours.");
+            $notice = 'Check your email to confirm the address.';
+        } catch (Throwable $exception) {
+            error_log('Billing email confirmation failed: ' . $exception->getMessage());
+            $error = $exception instanceof DomainException ? $exception->getMessage() : 'Unable to send confirmation email. Please try again.';
+        }
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'HEAD' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
         exit();
     }
@@ -74,8 +117,18 @@ if ($public) {
                 redirectTo();
             }
             if ($operation === 'client') {
-                query('INSERT INTO clients(name) VALUES(?)', [labelText(field('name'))]);
+                query('INSERT INTO clients(name,email) VALUES(?,?)', [labelText(field('name')), customerEmail(field('email'))]);
                 redirectTo('?clients');
+            }
+            if ($operation === 'client_email') {
+                $email = customerEmail(field('email'));
+                query('UPDATE clients SET email=? WHERE id=?', [$email, (int) field('id')]);
+                query('UPDATE mail_jobs SET state="cancelled" WHERE loan IN (SELECT id FROM loans WHERE client=?) AND state="pending" AND (recipient<>? OR ? IS NULL)', [(int) field('id'), $email, $email]);
+                redirectTo('?clients');
+            }
+            if ($operation === 'mail_settings') {
+                saveMailSettings($_POST);
+                redirectTo('?settings&saved=1');
             }
             if ($operation === 'details') {
                 $id = (int) field('id');
@@ -89,11 +142,23 @@ if ($public) {
                 redirectTo('?loan=' . $id . '#p-' . rawurlencode(field('month')));
             }
             if ($operation === 'payment') {
-                query('UPDATE payments SET paid=? WHERE loan=? AND month=?', [
-                    (int) (field('paid') === '1'),
+                $newPaid = (int) (field('paid') === '1');
+                $changed = query('UPDATE payments SET paid=? WHERE loan=? AND month=? AND paid<>?', [
+                    $newPaid,
                     (int) field('id'),
                     field('month'),
+                    $newPaid,
                 ]);
+                if ($changed->rowCount() && $newPaid) {
+                    query('INSERT OR IGNORE INTO mail_jobs(loan,month,kind,due_date,recipient) SELECT p.loan,p.month,?,p.month,c.email FROM payments p JOIN loans l ON l.id=p.loan JOIN clients c ON c.id=l.client JOIN mail_settings s ON s.id=1 AND s.enabled=1 WHERE p.loan=? AND p.month=? AND c.email IS NOT NULL', ['paid', (int) field('id'), field('month')]);
+                    $mailJobId = query('SELECT id FROM mail_jobs WHERE loan=? AND month=? AND kind="paid" AND state="pending"', [(int) field('id'), field('month')])->fetchColumn();
+                    if ($mailJobId) {
+                        deliverMailJobs((int) $mailJobId);
+                    }
+                }
+                if ($changed->rowCount() && !$newPaid) {
+                    query('DELETE FROM mail_jobs WHERE loan=? AND month=? AND kind="paid"', [(int) field('id'), field('month')]);
+                }
                 redirectTo('?loan=' . (int) field('id'));
             }
             if ($operation === 'save') {
@@ -180,6 +245,9 @@ elseif (isset($_GET['clients'])):
         'SELECT c.*,count(l.id) loans FROM clients c LEFT JOIN loans l ON l.client=c.id GROUP BY c.id ORDER BY c.name,c.id',
     )->fetchAll();
     $view = 'clients.php';
+elseif ($admin && isset($_GET['settings'])):
+    $mailSettings = mailSettings();
+    $view = 'settings.php';
 else:
     $loans = ledger();
     $view = 'ledger.php';

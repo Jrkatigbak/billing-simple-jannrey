@@ -9,6 +9,18 @@
     <p><?= escapeHtml($loan['title']) ?></p>
     <?php renderTotals($loan['total'], $loan['received']); ?>
 </section>
+<?php if ($public && !empty(mailSettings()['enabled'])): ?>
+    <section class="panel">
+        <h2>Email notifications</h2>
+        <form method="post">
+            <label>
+                Your email address
+                <input required type="email" name="email" maxlength="254" placeholder="name@example.com">
+            </label>
+            <button>Send confirmation</button>
+        </form>
+    </section>
+<?php endif; ?>
 <section class="sectionhead">
     <div>
         <h2>Payment schedule</h2>

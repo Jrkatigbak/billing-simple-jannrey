@@ -6,6 +6,10 @@
             Borrower name
             <input required name="name" maxlength="120" placeholder="Full name">
         </label>
+        <label>
+            Customer email (optional)
+            <input type="email" name="email" maxlength="254" placeholder="name@example.com">
+        </label>
         <button class="primary">Add client</button>
     </form>
 </div>
@@ -24,6 +28,15 @@
                     <?= $clientRow['loans'] ?>
                     <?= $clientRow['loans'] == 1 ? 'loan' : 'loans' ?>
                 </small>
+                <form method="post">
+                    <?php renderFormFields('client_email'); ?>
+                    <input type="hidden" name="id" value="<?= $clientRow['id'] ?>">
+                    <label>
+                        Notification email
+                        <input type="email" name="email" maxlength="254" value="<?= escapeHtml($clientRow['email'] ?? '') ?>" placeholder="name@example.com">
+                    </label>
+                    <button>Save email</button>
+                </form>
             </div>
             <a class="button" href="?new&amp;client=<?= $clientRow['id'] ?>">New loan</a>
         </div>

@@ -22,6 +22,7 @@
                     <nav>
                         <a href="./">Loans</a>
                         <a href="?clients">Clients</a>
+                        <a href="?settings">Email settings</a>
                     </nav>
                     <form class="right" method="post">
                         <?php renderFormFields('logout'); ?>
@@ -37,6 +38,9 @@
                 <p role="alert">
                     <?= escapeHtml($error) ?>
                 </p>
+            <?php endif; ?>
+            <?php if ($notice): ?>
+                <p role="status"><?= escapeHtml($notice) ?></p>
             <?php endif; ?>
             <?php require __DIR__ . '/' . $view; ?>
             <?php if ($loan): ?>
