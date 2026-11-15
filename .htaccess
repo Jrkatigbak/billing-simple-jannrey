@@ -1,0 +1,11 @@
+# The shared host serves the checkout at /billing/. Expose only the web entry
+# point and its assets, including their original /public/ URLs.
+RewriteEngine On
+# When the checkout itself is the subdomain root, accept /billing/ there too.
+RewriteCond %{HTTP_HOST} ^billing\.jannrey\.site$ [NC]
+RewriteRule ^billing/?$ / [R=302,L]
+RewriteRule ^(?:index\.php)?$ public/index.php [END]
+RewriteRule ^assets/(css/billing\.css|js/billing\.js)$ public/assets/$1 [END]
+RewriteRule ^public/?$ public/index.php [END]
+RewriteRule ^public/(?:index\.php|assets/css/billing\.css|assets/js/billing\.js)$ - [END]
+RewriteRule ^ - [F]
