@@ -17,7 +17,10 @@ const first = document.querySelector('[name="first"]');
 const terms = document.querySelector('[name="terms"]');
 if (first && terms) {
   const preview = document.querySelector('#term');
-  const format = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
+  const format = new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  });
   const update = () => {
     preview.textContent = '';
     if (!first.value || !first.validity.valid || !terms.validity.valid) return;
@@ -35,21 +38,22 @@ if (first && terms) {
 const proofDialog = document.querySelector('#proof-preview');
 if (proofDialog && typeof proofDialog.showModal === 'function') {
   const image = proofDialog.querySelector('img');
-  document.addEventListener('click', event => {
+  document.addEventListener('click', (event) => {
     const link = event.target.closest('[data-image-proof]');
     if (!link) return;
-    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+      return;
     event.preventDefault();
-    proofDialog.querySelector('h2').textContent = 'Payment ' + link.dataset.payment + ' · Proof of payment';
+    proofDialog.querySelector('h2').textContent =
+      'Payment ' + link.dataset.payment + ' · Proof of payment';
     image.src = link.href;
     proofDialog.showModal();
   });
   proofDialog.addEventListener('close', () => image.removeAttribute('src'));
 }
 
-// Process saves in submission order so a slower response cannot restore older totals.
 let pendingSave = Promise.resolve();
-document.addEventListener('submit', event => {
+document.addEventListener('submit', (event) => {
   const form = event.target;
   const row = form.closest('tr');
   const operation = form.elements.op?.value;
@@ -67,13 +71,18 @@ document.addEventListener('submit', event => {
   }
   message.textContent = 'Saving…';
   form.setAttribute('aria-busy', 'true');
-  const controls = [...form.elements].filter(control => !control.disabled);
-  controls.forEach(control => { control.disabled = true; });
+  const controls = [...form.elements].filter((control) => !control.disabled);
+  controls.forEach((control) => {
+    control.disabled = true;
+  });
 
   pendingSave = pendingSave.then(async () => {
     try {
       const response = await fetch(form.action, { method: 'POST', body: data });
-      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const page = new DOMParser().parseFromString(
+        await response.text(),
+        'text/html',
+      );
       const error = page.querySelector('[role="alert"]');
       if (error) throw new Error(error.textContent);
       if (response.status === 403 || page.querySelector('[name="password"]')) {
@@ -86,13 +95,18 @@ document.addEventListener('submit', event => {
       }
       cell.replaceChildren(...savedCell.childNodes);
       document.querySelector('.stats').replaceWith(totals);
-      message.textContent = operation === 'payment' ? 'Status saved.' : 'Details saved.';
+      message.textContent =
+        operation === 'payment' ? 'Status saved.' : 'Details saved.';
       cell.append(message);
     } catch (error) {
-      message.textContent = error instanceof TypeError
-        ? 'Connection interrupted. Check your connection and try again.' : error.message;
+      message.textContent =
+        error instanceof TypeError
+          ? 'Connection interrupted. Check your connection and try again.'
+          : error.message;
     } finally {
-      controls.forEach(control => { control.disabled = false; });
+      controls.forEach((control) => {
+        control.disabled = false;
+      });
       form.removeAttribute('aria-busy');
     }
   });
