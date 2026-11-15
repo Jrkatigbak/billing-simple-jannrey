@@ -171,7 +171,7 @@ elseif ($admin && (isset($_GET['new']) || ($loan && isset($_GET['edit'])))):
     $view = 'loan-form.php';
 elseif ($loan):
     $payments = query(
-        'SELECT p.*, d.mime, d.remarks FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? ORDER BY p.scheduled DESC, p.month',
+        'SELECT p.*, d.mime, d.remarks FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? AND p.scheduled=1 ORDER BY p.month',
         [$loan['id']],
     )->fetchAll();
     $view = 'statement.php';

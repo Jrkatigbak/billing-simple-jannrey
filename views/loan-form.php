@@ -43,7 +43,7 @@
             </p>
             <?php if ($loan): ?>
                 <p class="quiet">
-                    Amount changes apply to unpaid months. Paid installments keep their recorded amount. Payments, proofs, and remarks outside the revised dates stay in the statement history.
+                    Amount changes apply to unpaid months. Paid installments keep their recorded amount.
                 </p>
             <?php endif; ?>
             <button class="primary">Save loan</button>
