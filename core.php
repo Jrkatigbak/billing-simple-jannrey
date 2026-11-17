@@ -7,11 +7,14 @@ function db(): PDO
     if ($db) {
         return $db;
     }
-    $dir =
-        getenv('BILLING_DATA_DIR') ?:
-        (getenv('HOME') ?: sys_get_temp_dir()) .
-            '/.local/share/billing-simple-' .
-            substr(hash('sha256', __DIR__), 0, 12);
+    $home = getenv('HOME') ?: sys_get_temp_dir();
+    if (!is_writable($home) && function_exists('posix_getpwuid')) {
+        $owner = posix_getpwuid(fileowner(__FILE__));
+        $home = $owner['dir'] ?? $home;
+    }
+    $dir = getenv('BILLING_DATA_DIR') ?: $home .
+        '/.local/share/billing-simple-' .
+        substr(hash('sha256', __DIR__), 0, 12);
     if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
         throw new RuntimeException('Cannot open billing storage.');
     }

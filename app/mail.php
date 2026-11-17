@@ -58,7 +58,7 @@ function queueDueReminders(): void
     }
 }
 
-function smtpSend(array $settings, string $recipient, string $subject, string $body): void
+function smtpSend(array $settings, string $recipient, string $subject, string $body, ?string $html = null): void
 {
     $host = $settings['host'];
     $port = (int) $settings['port'];
@@ -101,12 +101,85 @@ function smtpSend(array $settings, string $recipient, string $subject, string $b
         $send('MAIL FROM:<' . $settings['sender'] . '>', [250]);
         $send('RCPT TO:<' . $recipient . '>', [250, 251]);
         $send('DATA', [354]);
-        $message = 'From: <' . $settings['sender'] . ">\r\nTo: <" . $recipient . ">\r\nSubject: " . $subject . "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" . $body;
+        $message = 'From: <' . $settings['sender'] . ">\r\nTo: <" . $recipient . ">\r\nSubject: " . $subject . "\r\nMIME-Version: 1.0\r\n";
+        if ($html === null) {
+            $message .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n" . $body;
+        } else {
+            $boundary = 'billing-' . bin2hex(random_bytes(12));
+            $message .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n\r\n";
+            $message .= "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n");
+            $message .= "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($html), 76, "\r\n");
+            $message .= "--{$boundary}--";
+        }
         $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $message));
         $send(implode("\r\n", array_map(static fn(string $line): string => str_starts_with($line, '.') ? '.' . $line : $line, $lines)) . "\r\n.", [250]);
         $send('QUIT', [221]);
     } finally {
         fclose($socket);
+    }
+}
+
+function paymentEmailContent(array $payment): array
+{
+    $paid = (bool) $payment['paid'];
+    $name = trim((string) $payment['name']);
+    $title = trim((string) $payment['title']);
+    $dueDate = paymentDateLabel($payment['month'], $payment['payment_day']);
+    $amount = money((int) $payment['cents']);
+    $subject = $paid ? 'Payment received' : 'Payment schedule reminder';
+    $heading = $paid ? 'Payment received' : 'Your payment is coming up';
+    $message = $paid
+        ? 'Your payment has been marked paid. Thank you.'
+        : 'Here are the details of your upcoming payment.';
+    $plain = "Hello {$name},\n\n{$message}\n\nLoan: {$title}\nAmount: {$amount}\nPayment date: {$dueDate}\nStatus: " . ($paid ? 'Paid' : 'Unpaid') . "\n\nJohn Rey Simple Billing System";
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $nameHtml = $escape($name);
+    $titleHtml = $escape($title);
+    $dueHtml = $escape($dueDate);
+    $amountHtml = $escape($amount);
+    $statusHtml = $paid ? 'PAID' : 'UPCOMING';
+    $html = '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>'
+        . '<body style="margin:0;padding:0;background:#f5f4fa;color:#24223a;font-family:Arial,Helvetica,sans-serif">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f4fa;padding:28px 12px"><tr><td align="center">'
+        . '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #e4e0ee;border-radius:16px;overflow:hidden">'
+        . '<tr><td style="background:#3d326d;padding:28px 32px;color:#ffffff">'
+        . '<span style="display:inline-block;background:#6a55b4;border-radius:10px;padding:8px 11px;font-size:24px;vertical-align:middle">▤</span>'
+        . '<span style="font-size:18px;font-weight:700;vertical-align:middle;padding-left:10px">John Rey Simple Billing System</span>'
+        . '</td></tr><tr><td style="padding:36px 32px">'
+        . '<p style="margin:0 0 10px;color:#705cae;font-size:12px;font-weight:700;letter-spacing:2px">PAYMENT UPDATE</p>'
+        . '<h1 style="margin:0 0 18px;font-size:30px;line-height:1.2;color:#24223a">' . $escape($heading) . '</h1>'
+        . '<p style="margin:0 0 10px;font-size:16px;line-height:1.6">Hello ' . $nameHtml . ',</p>'
+        . '<p style="margin:0 0 26px;color:#56536b;font-size:16px;line-height:1.6">' . $escape($message) . '</p>'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f5fc;border:1px solid #e5e0f1;border-radius:12px">'
+        . '<tr><td style="padding:22px 24px"><p style="margin:0 0 8px;color:#68627e;font-size:13px">' . $titleHtml . '</p>'
+        . '<p style="margin:0 0 18px;color:#3d326d;font-size:30px;font-weight:700">' . $amountHtml . '</p>'
+        . '<p style="margin:0;color:#56536b;font-size:14px">Payment date <strong style="color:#24223a">' . $dueHtml . '</strong></p>'
+        . '<p style="margin:10px 0 0;color:#56536b;font-size:14px">Status <strong style="color:#3d326d">' . $statusHtml . '</strong></p>'
+        . '</td></tr></table></td></tr><tr><td style="padding:20px 32px;background:#f0edf8;color:#625c76;font-size:12px;line-height:1.5">'
+        . 'John Rey Simple Billing System<br>This message was sent about your payment schedule.'
+        . '</td></tr></table></td></tr></table></body></html>';
+    return [$subject, $plain, $html];
+}
+
+function sendManualPaymentNotice(int $loanId, string $month): void
+{
+    $settings = mailSettings();
+    if (!$settings || !$settings['enabled']) {
+        throw new DomainException('Enable email notifications in Email settings first.');
+    }
+    $payment = query('SELECT p.*,l.title,l.payment_day,c.name,c.email FROM payments p JOIN loans l ON l.id=p.loan JOIN clients c ON c.id=l.client WHERE p.loan=? AND p.month=? AND p.scheduled=1', [$loanId, $month])->fetch();
+    if (!$payment) {
+        throw new DomainException('This payment is no longer on the schedule.');
+    }
+    if (!$payment['email']) {
+        throw new DomainException('Add an email address for this client first.');
+    }
+    [$subject, $plain, $html] = paymentEmailContent($payment);
+    try {
+        smtpSend($settings, $payment['email'], $subject, $plain, $html);
+    } catch (RuntimeException $error) {
+        error_log('Manual billing email failed: ' . $error->getMessage());
+        throw new DomainException('The email could not be sent. Check the SMTP settings and try again.');
     }
 }
 
@@ -122,13 +195,10 @@ function deliverMailJobs(?int $jobId = null): int
             query('UPDATE mail_jobs SET state="cancelled" WHERE id=?', [$job['id']]);
             continue;
         }
-        $due = paymentDateLabel($job['month'], $job['payment_day']);
-        $subject = $job['kind'] === 'paid' ? 'Payment received' : 'Upcoming payment reminder';
-        $body = $job['kind'] === 'paid'
-            ? "Hello {$job['name']},\n\nYour payment of " . money((int) $job['cents']) . " for {$job['title']} due {$due} has been marked paid.\n\nJohn Rey Simple Billing System"
-            : "Hello {$job['name']},\n\nYour payment of " . money((int) $job['cents']) . " for {$job['title']} is due {$due}.\n\nJohn Rey Simple Billing System";
+        $job['paid'] = $job['kind'] === 'paid';
+        [$subject, $body, $html] = paymentEmailContent($job);
         try {
-            smtpSend($settings, $job['recipient'], $subject, $body);
+            smtpSend($settings, $job['recipient'], $subject, $body, $html);
             query('UPDATE mail_jobs SET state="sent" WHERE id=?', [$job['id']]);
             $sent++;
         } catch (Throwable $error) {

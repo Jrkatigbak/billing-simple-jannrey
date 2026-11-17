@@ -161,6 +161,12 @@ if ($public) {
                 }
                 redirectTo('?loan=' . (int) field('id'));
             }
+            if ($operation === 'notify') {
+                $id = (int) field('id');
+                $month = field('month');
+                sendManualPaymentNotice($id, $month);
+                redirectTo('?loan=' . $id . '&notified=' . rawurlencode($month) . '#p-' . rawurlencode($month));
+            }
             if ($operation === 'save') {
                 $id = saveLoanFromForm();
                 redirectTo('?loan=' . $id);
@@ -235,6 +241,9 @@ elseif ($admin && (isset($_GET['new']) || ($loan && isset($_GET['edit'])))):
     }
     $view = 'loan-form.php';
 elseif ($loan):
+    if ($admin && isset($_GET['notified']) && is_string($_GET['notified'])) {
+        $notice = 'Payment notice sent to the client.';
+    }
     $payments = query(
         'SELECT p.*, d.mime, d.remarks FROM payments p LEFT JOIN payment_details d USING(loan,month) WHERE p.loan=? AND p.scheduled=1 ORDER BY p.month',
         [$loan['id']],

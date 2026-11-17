@@ -284,6 +284,16 @@ tr:last-child td {
   border-radius: 20px;
   font-weight: 650;
 }
+.notify-button {
+  border: 1px solid #ddd5f3;
+  border-radius: 8px;
+  background: #f3effc;
+  color: #51429b;
+  padding: 8px 14px;
+}
+.notify-button:hover {
+  background: #e9e2fa;
+}
 .p0 {
   background: #fbefda;
   color: #795317;

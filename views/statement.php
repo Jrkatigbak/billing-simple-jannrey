@@ -63,6 +63,9 @@
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Proof of payment</th>
+                <?php if ($admin): ?>
+                    <th>Action</th>
+                <?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -143,6 +146,16 @@
                         <?php
                         endif; ?>
                     </td>
+                    <?php if ($admin): ?>
+                        <td>
+                            <form method="post">
+                                <?php renderFormFields('notify'); ?>
+                                <input type="hidden" name="id" value="<?= $loan['id'] ?>">
+                                <input type="hidden" name="month" value="<?= escapeHtml($payment['month']) ?>">
+                                <button type="submit" class="notify-button" aria-label="Email client about Payment <?= $index + 1 ?>">Notify</button>
+                            </form>
+                        </td>
+                    <?php endif; ?>
                 </tr>
             <?php endforeach; ?>
         </tbody>
