@@ -101,7 +101,18 @@ function smtpSend(array $settings, string $recipient, string $subject, string $b
         $send('MAIL FROM:<' . $settings['sender'] . '>', [250]);
         $send('RCPT TO:<' . $recipient . '>', [250, 251]);
         $send('DATA', [354]);
-        $message = 'From: <' . $settings['sender'] . ">\r\nTo: <" . $recipient . ">\r\nSubject: " . $subject . "\r\nMIME-Version: 1.0\r\n";
+        $safeSubject = preg_replace('/[\x00-\x1f\x7f]+/', ' ', $subject);
+        $subjectHeader = iconv_mime_encode('Subject', $safeSubject, [
+            'scheme' => 'B',
+            'input-charset' => 'UTF-8',
+            'output-charset' => 'UTF-8',
+            'line-length' => 76,
+            'line-break-chars' => "\r\n",
+        ]);
+        if ($subjectHeader === false) {
+            throw new RuntimeException('Unable to encode the email subject.');
+        }
+        $message = 'From: <' . $settings['sender'] . ">\r\nTo: <" . $recipient . ">\r\n" . $subjectHeader . "\r\nMIME-Version: 1.0\r\n";
         if ($html === null) {
             $message .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n" . $body;
         } else {
@@ -126,7 +137,7 @@ function paymentEmailContent(array $payment): array
     $title = trim((string) $payment['title']);
     $dueDate = paymentDateLabel($payment['month'], $payment['payment_day']);
     $amount = money((int) $payment['cents']);
-    $subject = $paid ? 'Payment received' : 'Payment schedule reminder';
+    $subject = ($paid ? 'Payment received' : 'Payment schedule reminder') . ' - ' . $title;
     $heading = $paid ? 'Payment received' : 'Your payment is coming up';
     $message = $paid
         ? 'Your payment has been marked paid. Thank you.'
